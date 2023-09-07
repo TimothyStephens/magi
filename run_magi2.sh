@@ -1,48 +1,20 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
-# Name of the run 
-name=magi2_quicktest
-if [ ! -e ./tests/$name ]; then
-	mkdir ./tests/$name
-fi
+# Print all info to log file
+exec 1> "${0}.log.$(date +%s)" 2>&1
 
-# Full path to location where magi is installed
-magi_path=.
+#### Pre-run setup
+source ~/scripts/script_setup.sh
+set +eu; conda activate magi_2; set -eu
 
-# Input fasta file with protein sequences and unique identifiers in the header
-# Example of a header:
-# >gene_1 some description
-fasta=./tests/full_workflow_test/s_coelicolor_genes_fasta_smallset.faa
+export PYTHONPATH="/home/timothy/miniconda3/envs/magi_2/lib/python3.8/site-packages"
 
-# Input file with candidate compound SMILES in a column called original_compound
-compounds=./tests/full_workflow_test/random_smiles.csv
 
-# Other parameters for MAGI that may be useful
-cpu_count=8
-min_diameter=12 # this is the Retro Rules diameter, see https://retrorules.org/doc for details
-output_directory=./tests/$name/output_$name
-## Log files
-logfile_name=./tests/$name/log_magi_run_$name.txt
-error_log_name=./tests/$name/error_log_magi_run_$name.txt
+#### Start Script
+FASTA="Porites_Holoproteome_Sequences_for_MAGI.fasta"
+MZ="Pos_Metabolite_MAGI.csv"
+MAGI_PATH="/home/timothy/programs/magi-ret_15Mar2021"
 
-#####################################################################################
-source activate magi_2 #if this does not work, use conda activate magi
+./magi2.sh -f "$FASTA" -m "$MZ" --magi_path "$MAGI_PATH"
 
-echo "Starting MAGI at $(date)"
-python $magi_path/workflow_2/compound_to_reaction.py \
-    --compounds $compounds \
-    --fasta $fasta \
-    --diameter $min_diameter \
-    --cpu_count $cpu_count \
-    --use_precomputed_reactions True \
-    --output $output_directory > $logfile_name 2> $error_log_name
-if [ $? -eq 0 ]; then # Check if previous MAGI run did not fail
-python $magi_path/workflow_2/gene_to_reaction.py --not_first_script --output $output_directory >> $logfile_name 2>> $error_log_name
-else exit 1; fi
-if [ $? -eq 0 ]; then
-python $magi_path/workflow_2/reaction_to_gene.py --not_first_script --output $output_directory >> $logfile_name 2>> $error_log_name
-else exit 1; fi
-if [ $? -eq 0 ]; then
-python $magi_path/workflow_2/scoring.py --not_first_script --output $output_directory >> $logfile_name 2>> $error_log_name
-else exit 1; fi
-echo "Done"
+
