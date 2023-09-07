@@ -8,7 +8,8 @@ import argparse
 import logging
 import gzip
 import pandas as pd
-from rdkit.Chem import MolFromInchi, MolToSmiles
+from rdkit.Chem import MolFromInchi, MolToSmiles, MolFromSmiles
+from compound_to_reaction import prepare_smiles
 
 
 ## Pass arguments.
@@ -90,10 +91,21 @@ def mz_to_SMILES(mz_list, output_fh):
 
 
 def safe_InchiToSmiles(InChI):
+	# Converting InChI to SMILES (None if any error occurs)
 	try:
-		SMILES = MolToSmiles(MolFromInchi(InChI))
+		SMILES = MolToSmiles(MolFromInchi(InChI, sanitize=True))
 	except Exception as e:
 		logging.info("Problem converting " + InChI + " into SMILES - setting as None.")
+		SMILES = None
+	# Try to convert SMILES to mol
+	#   - Unfortinatly the SMILES produced can be invalud (for some reason) and kills MAGI2. 
+	#     Best to check now that we can actually do the conversion now, save having to handle
+	#     problem later. If the conversion fails, return None.
+	try:
+		prepare_smiles(SMILES)
+	except Exception as e:
+		logging.info("SMILES: " + SMILES + " failed prepare_smiles conversion - setting as None.")
+		print(e)
 		SMILES = None
 	return(SMILES)
 

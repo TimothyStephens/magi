@@ -174,15 +174,14 @@ def prepare_smiles(smiles, useHs = useHs):
     """
     saltremover = SaltRemover.SaltRemover()
     try:
-        mol = saltremover.StripMol(Chem.MolFromSmiles(smiles), dontRemoveEverything=True)
+        mol = Chem.MolFromSmiles(smiles)
+        mol = saltremover.StripMol(mol, dontRemoveEverything=True)
         mol = NeutraliseCharges(mol)
         mol = remove_stereochemistry(mol)
         mol = Chem.MolFromSmiles(Chem.MolToSmiles(mol)) # To fix kekulization bug
         mol = canonicalize_tautomer(mol)
     except Exception as e:
-        print("Problem preparing SMILES " + smiles)
-        print(e)
-        sys.exit(1)
+        raise Exception("Problem preparing SMILES " + smiles)
     if useHs:
         mol = Chem.AddHs(Chem.RemoveHs(mol))
     else:
@@ -221,7 +220,7 @@ def preprocess_compounds_data(compounds_path, cpu_count):
     
     # Prepare a InChI Key
     compounds_data["inchi_key"] = compounds_data["Mol"].apply(get_inchi_key)
-
+    
     compounds_data = compounds_data[["original_compound", "SMILES", "compound_score", "Mol", "inchi_key"]]
     return compounds_data
 
@@ -361,7 +360,7 @@ def find_precomputed_reactions(compounds_data, c2r_output_file, min_diameter = 1
             c2r_subset.to_csv(c2r_output_file, mode = 'a', header=False, index=False)
         else:
             not_precomputed_compounds.append(ix)
-    not_precomputed_compounds = compounds_data.iloc[not_precomputed_compounds]
+    not_precomputed_compounds = compounds_data.loc[not_precomputed_compounds]
     # Change data type to single pandas dataframe
     if len(precomputed_reactions) > 0:
         precomputed_reactions = pd.concat(precomputed_reactions)
