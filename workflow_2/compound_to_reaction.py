@@ -173,11 +173,16 @@ def prepare_smiles(smiles, useHs = useHs):
     Add hydrogens
     """
     saltremover = SaltRemover.SaltRemover()
-    mol = saltremover.StripMol(Chem.MolFromSmiles(smiles), dontRemoveEverything=True)
-    mol = NeutraliseCharges(mol)
-    mol = remove_stereochemistry(mol)
-    mol = Chem.MolFromSmiles(Chem.MolToSmiles(mol)) # To fix kekulization bug
-    mol = canonicalize_tautomer(mol)
+    try:
+        mol = saltremover.StripMol(Chem.MolFromSmiles(smiles), dontRemoveEverything=True)
+        mol = NeutraliseCharges(mol)
+        mol = remove_stereochemistry(mol)
+        mol = Chem.MolFromSmiles(Chem.MolToSmiles(mol)) # To fix kekulization bug
+        mol = canonicalize_tautomer(mol)
+    except Exception as e:
+        print("Problem preparing SMILES " + smiles)
+        print(e)
+        sys.exit(1)
     if useHs:
         mol = Chem.AddHs(Chem.RemoveHs(mol))
     else:

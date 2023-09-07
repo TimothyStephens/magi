@@ -166,7 +166,9 @@ class File(object):
 		self.file_obj.close()
 
 
-UNIQUE_COMPOUNDS_FILE="unique_compounds.csv.gz"
+SCRIPT_DIR=os.path.dirname(os.path.realpath(__file__))
+UNIQUE_COMPOUNDS_FILE=SCRIPT_DIR+"/unique_compounds.csv.gz"
+
 ADDUCT_INFO = {'[2M+H]': {'charge': '1',
               'color': '#fabebe',
               'common': True,
