@@ -8,6 +8,10 @@ Our vision is to systematically explore dark-biochemistry, using state-of-the-ar
 For more documentation and a tutorial on how to analyze MAGI results, you can visit the
 [MAGI website](https://magi.nersc.gov)
 
+## Fork Update (by Timothy Stephens)
+This repo is a fork of the main MAGI branch with minor bug fixes, updated main access script, and additional scripts for handling m/z as an input and filtering the outputs.
+A description of how to run my updated MAGI2 scripts can be found in [docs](docs/MAGI2_fork_instructions.md).
+
 ## MAGI 2.0 is under development!
 We are currently developing MAGI 2.0, which can be found in workflow_2. Where MAGI 1.0 links genes to metabolites based on similarity between chemical structures, known reactions and similarity between genes, MAGI 2.0 has an additional feature. Based on reaction patterns, MAGI 2.0 calculates whether a metabolite can be used by an enzyme and by that, MAGI 2.0 adds more evidence to gene-metabolite links. Below, you will find instructions to install both MAGI 1.0 and MAGI 2.0.
 

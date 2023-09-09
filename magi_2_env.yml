@@ -2,12 +2,14 @@ name: magi_2
 channels:
 - conda-forge
 - anaconda
+- bioconda
 dependencies:
 - numpy
 - pandas
 - pip
 - python=3.8
 - rdkit=2022.09.5
+- blast
 - pip:
   - molvs
   - tables
