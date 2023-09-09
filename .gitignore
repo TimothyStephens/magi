@@ -17,6 +17,7 @@ workflow/blastbin/blastp*
 workflow/blastbin/makeblastdb*
 outputs/
 
-workflow_2/tests/output*
+workflow_2/tests/out*
+workflow_2/tests/run_test.sh.log.*
 workflow_2/database/
 .vscode/*
