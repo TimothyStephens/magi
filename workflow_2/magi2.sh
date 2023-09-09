@@ -35,7 +35,7 @@ MAGI_PATH="${SCRIPTPATH}"
 FASTA=""
 SMILES=""
 MZ=""
-OUTPUT_DIRECTORY="outout_magi2"
+OUTPUT_DIRECTORY="output_magi2"
 
 
 ## Useage information
