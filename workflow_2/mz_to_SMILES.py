@@ -95,7 +95,7 @@ def safe_InchiToSmiles(InChI):
 	try:
 		SMILES = MolToSmiles(MolFromInchi(InChI, sanitize=True))
 	except Exception as e:
-		logging.info("Problem converting " + InChI + " into SMILES - setting as None.")
+		logging.info("Problem converting %s into SMILES - setting as None.", InChI)
 		SMILES = None
 	# Try to convert SMILES to mol
 	#   - Unfortinatly the SMILES produced can be invalud (for some reason) and kills MAGI2. 
@@ -104,7 +104,7 @@ def safe_InchiToSmiles(InChI):
 	try:
 		prepare_smiles(SMILES)
 	except Exception as e:
-		logging.info("SMILES: " + SMILES + " failed prepare_smiles conversion - setting as None.")
+		logging.info("SMILES: %s failed prepare_smiles conversion - setting as None.", SMILES)
 		print(e)
 		SMILES = None
 	return(SMILES)
