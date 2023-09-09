@@ -202,6 +202,12 @@ then
 fi
 
 
+# Filter results
+run_cmd "./filter_results.py -i ${OUTPUT_DIRECTORY}/magi_results.csv -o ${OUTPUT_DIRECTORY}.filtered_magi_results.csv"
+run_cmd "./filter_results.py -i ${OUTPUT_DIRECTORY}/magi_gene_results.csv -o ${OUTPUT_DIRECTORY}.filtered_magi_gene_results.csv"
+run_cmd "./filter_results.py -i ${OUTPUT_DIRECTORY}/magi_compound_results.csv -o ${OUTPUT_DIRECTORY}.filtered_magi_compound_results.csv"
+
+
 ## Done
 log "Finished running MAGI2!"
 

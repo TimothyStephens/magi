@@ -36,4 +36,13 @@ Example run using SMILES values, which need to be in a column with a header call
 ./magi2.sh -f tests/test_pep.fa -m tests/test_SMILES.txt
 ```
 
+The final (filtered) MAGI2 results will be in.
+```bash
+output_magi2.filtered_magi_results.csv
+output_magi2.filtered_magi_gene_results.csv
+output_magi2.filtered_magi_compound_results.csv
+```
+This selects for just results with compound_score = 1, e_score_r2g (reaction-to-gene) > 5, e_score_g2r (gene-to-reaction) > 5, and reciprocal_score = 2.
+
+If you want to use different cutoffs, you can rerun filtering with the `filter_results.py` script.
 
