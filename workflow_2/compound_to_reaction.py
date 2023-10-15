@@ -207,16 +207,18 @@ def preprocess_compounds_data(compounds_path, cpu_count):
     compounds_metadata = compounds_data.copy()
 
     # Prepare a MAGI SMILES
-    # TODO: fix multiprocessing
-    #if cpu_count > 1:
-    #    try: 
-    #        p = mp.Pool(cpu_count)
-    #        compounds_data["SMILES", "Mol"] = p.map(prepare_smiles, compounds_data["original_compound"])
-    #    finally:
-    #        p.close()
-    #        p.terminate()
-    #else:
-    compounds_data["SMILES"], compounds_data["Mol"] = zip(*compounds_data["original_compound"].apply(prepare_smiles))
+    if cpu_count > 1:
+        try: 
+            p = mp.Pool(cpu_count)
+            res = pd.DataFrame.from_records(p.map(prepare_smiles, compounds_data["original_compound"]), columns = ["SMILES", "Mol"])
+            compounds_data = pd.concat([compounds_data, res], axis=1)
+            #pd.set_option('display.max_columns', None)
+            #print(compounds_data)
+        finally:
+            p.close()
+            p.terminate()
+    else:
+        compounds_data["SMILES"], compounds_data["Mol"] = zip(*compounds_data["original_compound"].apply(prepare_smiles))
     
     # Prepare a InChI Key
     compounds_data["inchi_key"] = compounds_data["Mol"].apply(get_inchi_key)
@@ -228,14 +230,18 @@ def mol_from_smiles(smiles, useHs = useHs):
     """
     Create Rdkit.Chem.Mol object from SMILES and add hydrogens
     """
-    mol = Chem.MolFromSmiles(smiles)
-    if useHs:
-        mol = Chem.AddHs(Chem.RemoveHs(mol))
-    else:
-        mol = Chem.RemoveHs(mol)
+    try:
+        mol = Chem.MolFromSmiles(smiles)
+        if useHs:
+            mol = Chem.AddHs(Chem.RemoveHs(mol))
+        else:
+            mol = Chem.RemoveHs(mol)
+    except Exception as e:
+        mol = None
+    
     if mol is None:
         # TODO: exit or move mol to log unsearched compounds?
-        sys.exit("{} cannot be converted to rdkit.Mol object".format(smiles))
+        print("WARNING: {} cannot be converted to rdkit.Mol object".format(smiles))
     return mol
 
 def calculate_fingerprint_similarity(mol1, mol2, fingerprint_radius = 3):
@@ -330,7 +336,12 @@ def lookup_matching_reactions_for_one_compound(original_compound, compound_score
     return reactions
 
 def get_inchi_key(molecule):
-    return inchi.MolToInchiKey(molecule)
+    try:
+        mol = inchi.MolToInchiKey(molecule)
+    except Exception as e:
+        print("Mol: "+str(molecule)+" failed conversion to InChI key - setting as None.")
+        return None
+    return mol
 ### Run C2R
 def find_precomputed_reactions(compounds_data, c2r_output_file, min_diameter = 12, similarity_cutoff =0.6):
     """
@@ -396,7 +407,8 @@ def find_new_reactions(compounds_data, c2r_output_file, min_diameter = 12, cpu_c
                         min_diameter = min_diameter, 
                         c2r_output_file = c2r_output_file, 
                         fingerprint_radius = fingerprint_radius, 
-                        similarity_cutoff = similarity_cutoff), 
+                        similarity_cutoff = similarity_cutoff,
+                        quiet=True), 
                         compounds_data[["SMILES", "original_compound", "compound_score"]].iterrows())
         finally:
             # This should also close the multiprocessing pool in case of an exception
@@ -422,7 +434,7 @@ def find_new_reactions(compounds_data, c2r_output_file, min_diameter = 12, cpu_c
         c2r = pd.concat(c2r) 
     return c2r
 
-def compound_to_reaction(canonical_and_original_smiles_and_compound_score, rules_to_use=Retro_rules_reactions, substrates_to_use = Retro_rules_substrates, min_diameter=0, c2r_output_file=None, fingerprint_radius=3, similarity_cutoff=0.6, use_precomputed = True):
+def compound_to_reaction(canonical_and_original_smiles_and_compound_score, rules_to_use=Retro_rules_reactions, substrates_to_use = Retro_rules_substrates, min_diameter=0, c2r_output_file=None, fingerprint_radius=3, similarity_cutoff=0.6, use_precomputed = True, quiet=False):
     """
     Find reactions in which a molecule can be used as a substrate
     - For the lowest retro rules diameters, find all reactions in which the compound can be used.
@@ -435,6 +447,10 @@ def compound_to_reaction(canonical_and_original_smiles_and_compound_score, rules
     # Generate inchi key for the molecule
     molecule = mol_from_smiles(molecule_smiles)
     molecule_inchikey = get_inchi_key(molecule)
+    # Stop if we cant convert SMILE
+    if molecule_inchikey is None:
+        return None
+    
     # Lookup molecule in precomputed compounds
     if use_precomputed:
         compound_to_reaction = lookup_precomputed_reactions(molecule_inchikey = molecule_inchikey, 
@@ -494,7 +510,8 @@ def compound_to_reaction(canonical_and_original_smiles_and_compound_score, rules
         compound_to_reaction.to_csv(c2r_output_file, mode = 'a', header=False, index=False)
         return compound_to_reaction
     else:
-        print("No reactions found for {}".format(original_compound))
+        if not quiet:
+            print("No reactions found for {}".format(original_compound))
         return None
 
 def compound_to_reaction_scoring(compound, reaction, compound_score, diameter, fingerprint_similarity):
@@ -545,7 +562,7 @@ def main():
     start_time = datetime.datetime.now()
     print("Starting compound to reaction search at {}".format(str(start_time)))
     magi_parameters = mg.general_magi_preparation()
-    magi_parameters["cpu_count"] = 1 # Quick fix for multiprocessing bug
+    #magi_parameters["cpu_count"] = 1 # Quick fix for multiprocessing bug
     
     # Load compounds data and add SMILES, MOLs and InChI Keys
     print("!!! Loading compounds")
@@ -582,7 +599,7 @@ def main():
         # Run compound to reaction search
         print("!!! Starting new compound to reaction searches for "+str(len(not_precomputed_compounds))+" compounds"); 
         sys.stdout.flush()
-        new_reactions = find_new_reactions(not_precomputed_compounds, c2r_output_file)
+        new_reactions = find_new_reactions(not_precomputed_compounds, c2r_output_file, cpu_count=magi_parameters["cpu_count"])
         if len(new_reactions) > 0:
             print(str(len(new_reactions))+" new reactions found");
             if len(reactions) > 0:

@@ -9,6 +9,7 @@ import argparse
 import time
 import json
 from multiprocessing import cpu_count as counting_cpus
+import csv
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from local_settings import local_settings_magi2 as settings_loc
@@ -466,9 +467,9 @@ def load_dataframe(fname, filetype=None, key=None):
         elif file_ext in ['xls', 'xlsx']:
             df = pd.read_excel(fname)
         elif file_ext in ['csv']:
-            df = pd.read_csv(fname)
+            df = pd.read_csv(fname, engine='python', quoting=csv.QUOTE_NONE)
         elif file_ext in ['txt', 'tab', 'tsv']:
-            df = pd.read_csv(fname, sep='\t')
+            df = pd.read_csv(fname, sep='\t', engine='python', quoting=csv.QUOTE_NONE)
         elif file_ext in ['h5', 'hdf5']:
             if key is None:
                 raise IOError('"key" argument must be used when loading\

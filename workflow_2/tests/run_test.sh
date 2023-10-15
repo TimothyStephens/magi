@@ -12,6 +12,6 @@ FASTA="test_pep.fa"
 MZ="test_mz.txt"
 
 #### Start Script
-./../magi2.sh -f "$FASTA" -m "$MZ"
+./../magi2.sh -f "$FASTA" -m "$MZ" --ncpus 2
 
 

@@ -172,12 +172,52 @@ else
 fi
 
 
+# Split input file to run parallel
+CHECKPOINT="${OUTPUT_DIRECTORY}/.checkpoint/split.done"
+if [ ! -e "${CHECKPOINT}" ];
+then
+  run_cmd "${MAGI_PATH}/split.sh -p ${NCPUS} -f ${COMPOUNDS}" \
+    && touch "${CHECKPOINT}" || exit 1
+fi
+
+
 # Start running MAGI2
 CHECKPOINT="${OUTPUT_DIRECTORY}/.checkpoint/compound_to_reaction.done"
 if [ ! -e "${CHECKPOINT}" ];
 then
-  run_cmd "python ${MAGI_PATH}/compound_to_reaction.py --compounds ${COMPOUNDS} --fasta ${FASTA} --diameter ${MIN_DIAMETER} --cpu_count ${NCPUS} --use_precomputed_reactions True --output ${OUTPUT_DIRECTORY}" \
-    && touch "${CHECKPOINT}" || exit 1
+  log "Running compound_to_reaction.py on split ${COMPOUNDS} file"
+  while read F;
+  do
+    N="${F#*.split_*}"
+    N="${N%*.*}"
+    CHECKPOINT_N="${CHECKPOINT}.$N"
+    if [ ! -e "${CHECKPOINT_N}" ];
+    then
+      echo "python ${MAGI_PATH}/compound_to_reaction.py --compounds ${F} --fasta ${FASTA} --diameter ${MIN_DIAMETER} --cpu_count 1 --use_precomputed_reactions True --output ${F}.c2r 1>${F}.c2r.log 2>&1 && touch ${CHECKPOINT_N} || exit 1"
+    fi
+  done < "${COMPOUNDS}.parts.txt" | parallel -j ${NCPUS} -v
+  
+  log "Done running compound_to_reaction.py - joining split files"
+  
+  # Create "used_parameters.json" file for combined file
+  T=$(head -n1 "${COMPOUNDS}.parts.txt")
+  cat "${T}.c2r/used_parameters.json" | sed -e "s@${T}.c2r@${OUTPUT_DIRECTORY}@g" -e "s@${T}@${COMPOUNDS}@g" > "${OUTPUT_DIRECTORY}/used_parameters.json"
+  
+  # "intermediate_files/" dir for combined file
+  mkdir -p "${OUTPUT_DIRECTORY}/intermediate_files"
+  
+  # Create "timer.txt" file
+  cat "${T}.c2r/intermediate_files/timer.txt" > "${OUTPUT_DIRECTORY}/intermediate_files/timer.txt"
+  
+  # Combine split SMILES results
+  while read F;
+  do
+    cat "${F}.c2r/intermediate_files/compound_to_reaction.csv"
+  done \
+    < "${COMPOUNDS}.parts.txt" \
+      | awk 'NR==1 || $1!~"^original_compound"' \
+      > "${OUTPUT_DIRECTORY}/intermediate_files/compound_to_reaction.csv" \
+    && touch ${CHECKPOINT} || exit 1
 fi
 
 CHECKPOINT="${OUTPUT_DIRECTORY}/.checkpoint/gene_to_reaction.done"
@@ -203,9 +243,9 @@ fi
 
 
 # Filter results
-run_cmd "./filter_results.py -i ${OUTPUT_DIRECTORY}/magi_results.csv -o ${OUTPUT_DIRECTORY}.filtered_magi_results.csv"
-run_cmd "./filter_results.py -i ${OUTPUT_DIRECTORY}/magi_gene_results.csv -o ${OUTPUT_DIRECTORY}.filtered_magi_gene_results.csv"
-run_cmd "./filter_results.py -i ${OUTPUT_DIRECTORY}/magi_compound_results.csv -o ${OUTPUT_DIRECTORY}.filtered_magi_compound_results.csv"
+run_cmd "python ${MAGI_PATH}/filter_results.py -i ${OUTPUT_DIRECTORY}/magi_results.csv -o ${OUTPUT_DIRECTORY}.filtered_magi_results.csv"
+run_cmd "python ${MAGI_PATH}/filter_results.py -i ${OUTPUT_DIRECTORY}/magi_gene_results.csv -o ${OUTPUT_DIRECTORY}.filtered_magi_gene_results.csv"
+run_cmd "python ${MAGI_PATH}/filter_results.py -i ${OUTPUT_DIRECTORY}/magi_compound_results.csv -o ${OUTPUT_DIRECTORY}.filtered_magi_compound_results.csv"
 
 
 ## Done
