@@ -1,8 +1,12 @@
 #!/usr/bin/env bash
 
-VERSION="0.1"
+VERSION="2.0.2"
 
+
+
+##
 ## Pre-run setup
+##
 set -euo pipefail
 IFS=$'\n\t'
 
@@ -12,7 +16,10 @@ SCRIPT=$(readlink -f "$0")
 SCRIPTPATH=$(dirname "$SCRIPT")
 
 
+
+##
 ## Helper functions
+##
 function run_cmd(){
   local CMD="$@"
   echo -e "[`date`]\tCMD: $CMD"
@@ -28,7 +35,10 @@ function err(){
 }
 
 
+
+##
 ## Set option envs
+##
 NCPUS=8
 NPARTS=8
 MIN_DIAMETER=12 # this is the Retro Rules diameter, see https://retrorules.org/doc for details
@@ -39,7 +49,10 @@ MZ=""
 OUTPUT_DIRECTORY="output_magi2"
 
 
+
+##
 ## Useage information
+##
 usage() {
 echo -e "##
 ## $(basename ${0}) v${VERSION}
@@ -146,35 +159,49 @@ done
 set -- "${POSITIONAL[@]}" # restore positional parameters
 
 
+
+##
+## Starting MAGI2
+##
+log "MAGI2 (v${VERSION})"
+
+
+
+##
 ## Check required arguments are set
+##
 set +eu
 if [ -z "${FASTA}" ] || ([ -z "${MZ}" ] && [ -z "${SMILES}" ]);
 then
-    usage
+  usage
 fi
 set -eu
 
 
 
+##
 ## Check files exist
+##
 if [ ! -s "${FASTA}" ]; then log "${FASTA} does not exist!"; exit 1; fi
 if [ ! -z "${MZ}" ];
 then
-if [ ! -s "${MZ}" ]; then log "${MZ} does not exist!"; exit 1; fi
+  if [ ! -s "${MZ}" ]; then log "${MZ} does not exist!"; exit 1; fi
 else
-if [ ! -s "${SMILES}" ]; then log "${SMILES} does not exist!"; exit 1; fi
-
+  if [ ! -s "${SMILES}" ]; then log "${SMILES} does not exist!"; exit 1; fi
 fi
 
 
-## Start running MAGI2
 
-# Create output dir if doesnt exist.
+##
+## Create output dir if doesnt exist.
+##
 mkdir -p "${OUTPUT_DIRECTORY}" "${OUTPUT_DIRECTORY}/.checkpoint"
 
 
 
-# Run "mz_to_InChI.py" if m/z values given not SMILES
+##
+## Run "mz_to_InChI.py" if m/z values given not SMILES
+##
 if [ ! -z "${MZ}" ];
 then
   COMPOUNDS="${OUTPUT_DIRECTORY}/input.smiles.tsv"
@@ -191,7 +218,9 @@ fi
 
 
 
-# Split input file to run parallel
+##
+## Split input file to run parallel
+##
 CHECKPOINT="${OUTPUT_DIRECTORY}/.checkpoint/split.done"
 if [ ! -e "${CHECKPOINT}" ];
 then
@@ -203,7 +232,9 @@ fi
 
 
 
-# MAGI2 - compound_to_reaction.py
+##
+## MAGI2 - compound_to_reaction.py
+##
 CHECKPOINT="${OUTPUT_DIRECTORY}/.checkpoint/compound_to_reaction.done"
 if [ ! -e "${CHECKPOINT}" ];
 then
@@ -225,7 +256,9 @@ fi
 
 
 
-# MAGI2 - gene_to_reaction.py
+##
+## MAGI2 - gene_to_reaction.py
+##
 CHECKPOINT="${OUTPUT_DIRECTORY}/.checkpoint/gene_to_reaction.done"
 if [ ! -e "${CHECKPOINT}" ];
 then
@@ -247,7 +280,9 @@ fi
 
 
 
-# MAGI2 - reaction_to_gene.py
+##
+## MAGI2 - reaction_to_gene.py
+##
 CHECKPOINT="${OUTPUT_DIRECTORY}/.checkpoint/reaction_to_gene.done"
 if [ ! -e "${CHECKPOINT}" ];
 then
@@ -269,7 +304,9 @@ fi
 
 
 
-# MAGI2 - scoring.py
+##
+## MAGI2 - scoring.py
+##
 CHECKPOINT="${OUTPUT_DIRECTORY}/.checkpoint/scoring.done"
 if [ ! -e "${CHECKPOINT}" ];
 then
@@ -291,7 +328,9 @@ fi
 
 
 
-# MAGI2 - combine results
+##
+## MAGI2 - combine results
+##
 CHECKPOINT="${OUTPUT_DIRECTORY}/.checkpoint/combine.done"
 if [ ! -e "${CHECKPOINT}" ];
 then
@@ -325,7 +364,9 @@ fi
 
 
 
-# Filter results
+##
+## Filter results
+##
 CHECKPOINT="${OUTPUT_DIRECTORY}/.checkpoint/filter.done"
 if [ ! -e "${CHECKPOINT}" ];
 then
@@ -339,7 +380,9 @@ fi
 
 
 
-## Done
+##
+## Done MAGI
+##
 log "Finished running MAGI2!"
 
 
