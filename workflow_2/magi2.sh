@@ -30,6 +30,7 @@ function err(){
 
 ## Set option envs
 NCPUS=8
+NPARTS=8
 MIN_DIAMETER=12 # this is the Retro Rules diameter, see https://retrorules.org/doc for details
 MAGI_PATH="${SCRIPTPATH}"
 FASTA=""
@@ -47,9 +48,9 @@ echo -e "##
 Run MAGI2
 
 Usage: 
-./$(basename $0) -f pep.fa -m mz.txt
+./$(basename $0) -f pep.fa -p 20 -n 10 -m mz.txt
 *OR*
-./$(basename $0) -f pep.fa -s SMILES.csv
+./$(basename $0) -f pep.fa -p 20 -n 10 -s SMILES.csv 
 
 Required:
 -f, --fasta     Input fasta file with protein sequences and unique identifiers in the header
@@ -62,10 +63,20 @@ Required:
 Optional:
 --magi_path     Full path to location where magi is installed (default: ${MAGI_PATH})
 -o, --output    Output directory with MAGI2 results (default: ${OUTPUT_DIRECTORY})
+-p, --parts     Num parts to split --smiles/--mz file into before running magi (default: ${NPARTS})
 -n, --ncpus     Num threads to use for MAGI2 (default: ${NCPUS})
 -v, --version   Script version (v${VERSION})
 -h, --help      This help message
 --debug         Run debug mode
+
+Details:
+The --nparts and --ncpus options allows you to control how parallel to run magi 
+and how small each parallel piece should be.
+NOTE:
+  - MAGI can be quite memory hungry at certain stages. Each part (with ~7000 lines)
+    can use upto 50GB of memory. So you can split large compound files into lots of
+    parts (e.g., '--nparts 24') and run a few of them (e.g., '--ncpus 6') at a time to lower
+    overall memory useage. 
 " 1>&2
 exit 1
 }
@@ -100,6 +111,11 @@ while [[ $# -gt 0 ]]; do
       ;;
     -o|--output)
       OUTPUT_DIRECTORY="$2"
+      shift # past argument
+      shift # past value
+      ;;
+    -p|--nparts)
+      NPARTS="$2"
       shift # past argument
       shift # past value
       ;;
@@ -156,6 +172,8 @@ fi
 # Create output dir if doesnt exist.
 mkdir -p "${OUTPUT_DIRECTORY}" "${OUTPUT_DIRECTORY}/.checkpoint"
 
+
+
 # Run "mz_to_InChI.py" if m/z values given not SMILES
 if [ ! -z "${MZ}" ];
 then
@@ -172,83 +190,157 @@ else
 fi
 
 
+
 # Split input file to run parallel
 CHECKPOINT="${OUTPUT_DIRECTORY}/.checkpoint/split.done"
 if [ ! -e "${CHECKPOINT}" ];
 then
-  run_cmd "${MAGI_PATH}/split.sh -p ${NCPUS} -f ${COMPOUNDS}" \
+  log "Splitting ${COMPOUNDS} into ${NPARTS} parts"
+  run_cmd "${MAGI_PATH}/split.sh -p ${NPARTS} -f ${COMPOUNDS}" \
     && touch "${CHECKPOINT}" || exit 1
+  log "  - Done"
 fi
 
 
-# Start running MAGI2
+
+# MAGI2 - compound_to_reaction.py
 CHECKPOINT="${OUTPUT_DIRECTORY}/.checkpoint/compound_to_reaction.done"
 if [ ! -e "${CHECKPOINT}" ];
 then
-  log "Running compound_to_reaction.py on split ${COMPOUNDS} file"
+  log "Running compound_to_reaction.py on each part"
   while read F;
   do
     N="${F#*.split_*}"
     N="${N%*.*}"
-    CHECKPOINT_N="${CHECKPOINT}.$N"
+    CHECKPOINT_N="${OUTPUT_DIRECTORY}/.checkpoint/compound_to_reaction.$N.done"
     if [ ! -e "${CHECKPOINT_N}" ];
     then
-      echo "python ${MAGI_PATH}/compound_to_reaction.py --compounds ${F} --fasta ${FASTA} --diameter ${MIN_DIAMETER} --cpu_count 1 --use_precomputed_reactions True --output ${F}.c2r 1>${F}.c2r.log 2>&1 && touch ${CHECKPOINT_N} || exit 1"
+      echo "python ${MAGI_PATH}/compound_to_reaction.py --compounds ${F} --fasta ${FASTA} --diameter ${MIN_DIAMETER} --cpu_count 1 --use_precomputed_reactions True --output ${F}.magi 1>${F}.compound_to_reaction.log 2>&1 && touch ${CHECKPOINT_N} || exit 1"
     fi
-  done < "${COMPOUNDS}.parts.txt" | parallel -j ${NCPUS} -v
-  
-  log "Done running compound_to_reaction.py - joining split files"
-  
-  # Create "used_parameters.json" file for combined file
-  T=$(head -n1 "${COMPOUNDS}.parts.txt")
-  cat "${T}.c2r/used_parameters.json" | sed -e "s@${T}.c2r@${OUTPUT_DIRECTORY}@g" -e "s@${T}@${COMPOUNDS}@g" > "${OUTPUT_DIRECTORY}/used_parameters.json"
-  
-  # "intermediate_files/" dir for combined file
-  mkdir -p "${OUTPUT_DIRECTORY}/intermediate_files"
-  
-  # Create "timer.txt" file
-  cat "${T}.c2r/intermediate_files/timer.txt" > "${OUTPUT_DIRECTORY}/intermediate_files/timer.txt"
-  
-  # Combine split SMILES results
-  while read F;
-  do
-    cat "${F}.c2r/intermediate_files/compound_to_reaction.csv"
-  done \
-    < "${COMPOUNDS}.parts.txt" \
-      | awk 'NR==1 || $1!~"^original_compound"' \
-      > "${OUTPUT_DIRECTORY}/intermediate_files/compound_to_reaction.csv" \
-    && touch ${CHECKPOINT} || exit 1
+  done < "${COMPOUNDS}.parts.txt" \
+    | parallel -j ${NCPUS} -v \
+    && touch "${CHECKPOINT}"
+  log "  - Done"
 fi
 
+
+
+# MAGI2 - gene_to_reaction.py
 CHECKPOINT="${OUTPUT_DIRECTORY}/.checkpoint/gene_to_reaction.done"
 if [ ! -e "${CHECKPOINT}" ];
 then
-  run_cmd "python ${MAGI_PATH}/gene_to_reaction.py --not_first_script --output ${OUTPUT_DIRECTORY}" \
-    && touch "${CHECKPOINT}" || exit 1
+  log "Running gene_to_reaction.py on each part"
+  while read F;
+  do
+    N="${F#*.split_*}"
+    N="${N%*.*}"
+    CHECKPOINT_N="${OUTPUT_DIRECTORY}/.checkpoint/gene_to_reaction.$N.done"
+    if [ ! -e "${CHECKPOINT_N}" ];
+    then
+      echo "python ${MAGI_PATH}/gene_to_reaction.py --not_first_script --output ${F}.magi 1>${F}.gene_to_reaction.log 2>&1 && touch ${CHECKPOINT_N} || exit 1 "
+    fi
+  done < "${COMPOUNDS}.parts.txt" \
+    | parallel -j ${NCPUS} -v \
+    && touch "${CHECKPOINT}"
+  log "  - Done"
 fi
 
+
+
+# MAGI2 - reaction_to_gene.py
 CHECKPOINT="${OUTPUT_DIRECTORY}/.checkpoint/reaction_to_gene.done"
 if [ ! -e "${CHECKPOINT}" ];
 then
-  run_cmd "python ${MAGI_PATH}/reaction_to_gene.py --not_first_script --output ${OUTPUT_DIRECTORY}" \
-    && touch "${CHECKPOINT}" || exit 1
+  log "Running reaction_to_gene.py on each part"
+  while read F;
+  do
+    N="${F#*.split_*}"
+    N="${N%*.*}"
+    CHECKPOINT_N="${OUTPUT_DIRECTORY}/.checkpoint/reaction_to_gene.$N.done"
+    if [ ! -e "${CHECKPOINT_N}" ];
+    then
+      echo "python ${MAGI_PATH}/reaction_to_gene.py --not_first_scrip --output ${F}.magi 1>${F}.reaction_to_gene.log 2>&1 && touch ${CHECKPOINT_N} || exit 1"
+    fi
+  done < "${COMPOUNDS}.parts.txt" \
+    | parallel -j ${NCPUS} -v \
+    && touch "${CHECKPOINT}"
+  log "  - Done"
 fi
 
+
+
+# MAGI2 - scoring.py
 CHECKPOINT="${OUTPUT_DIRECTORY}/.checkpoint/scoring.done"
 if [ ! -e "${CHECKPOINT}" ];
 then
-  run_cmd "python ${MAGI_PATH}/scoring.py --not_first_script --output ${OUTPUT_DIRECTORY}" \
-    && touch "${CHECKPOINT}" || exit 1
+  log "Running scoring.py on each part"
+  while read F;
+  do
+    N="${F#*.split_*}"
+    N="${N%*.*}"
+    CHECKPOINT_N="${OUTPUT_DIRECTORY}/.checkpoint/scoring.$N.done"
+    if [ ! -e "${CHECKPOINT_N}" ];
+    then
+      echo "python ${MAGI_PATH}/scoring.py --not_first_script --output ${F}.magi 1>${F}.scoring.log 2>&1 && touch ${CHECKPOINT_N} || exit 1"
+    fi
+  done < "${COMPOUNDS}.parts.txt" \
+    | parallel -j 1 -v \
+    && touch "${CHECKPOINT}"
+  log "  - Done"
 fi
 
 
+
+# MAGI2 - combine results
+CHECKPOINT="${OUTPUT_DIRECTORY}/.checkpoint/combine.done"
+if [ ! -e "${CHECKPOINT}" ];
+then
+  log "Combining magi_compound_results.csv files from each part"
+  while read F;
+  do
+    cat "${F}.magi/magi_compound_results.csv"
+  done < "${COMPOUNDS}.parts.txt" \
+    | awk 'NR==1 || $1!~"^original_compound"' \
+    > "${OUTPUT_DIRECTORY}.magi_compound_results.csv"
+  
+  log "Combining magi_gene_results.csv files from each part"
+  while read F;
+  do
+    cat "${F}.magi/magi_gene_results.csv"
+  done < "${COMPOUNDS}.parts.txt" \
+    | awk 'NR==1 || $1!~"^original_compound"' \
+    > "${OUTPUT_DIRECTORY}.magi_gene_results.csv"
+  
+  log "Combining magi_results.csv files from each part"
+  while read F;
+  do
+    cat "${F}.magi/magi_results.csv"
+  done < "${COMPOUNDS}.parts.txt" \
+    | awk 'NR==1 || $1!~"^original_compound"' \
+    > "${OUTPUT_DIRECTORY}.magi_results.csv"
+  
+  touch "${CHECKPOINT}"
+  log "  - Done"
+fi
+
+
+
 # Filter results
-run_cmd "python ${MAGI_PATH}/filter_results.py -i ${OUTPUT_DIRECTORY}/magi_results.csv -o ${OUTPUT_DIRECTORY}.filtered_magi_results.csv"
-run_cmd "python ${MAGI_PATH}/filter_results.py -i ${OUTPUT_DIRECTORY}/magi_gene_results.csv -o ${OUTPUT_DIRECTORY}.filtered_magi_gene_results.csv"
-run_cmd "python ${MAGI_PATH}/filter_results.py -i ${OUTPUT_DIRECTORY}/magi_compound_results.csv -o ${OUTPUT_DIRECTORY}.filtered_magi_compound_results.csv"
+CHECKPOINT="${OUTPUT_DIRECTORY}/.checkpoint/filter.done"
+if [ ! -e "${CHECKPOINT}" ];
+then
+  log "Filtering combined results"
+  run_cmd "python ${MAGI_PATH}/filter_results.py -i ${OUTPUT_DIRECTORY}.magi_results.csv -o ${OUTPUT_DIRECTORY}.filtered_magi_results.csv"
+  run_cmd "python ${MAGI_PATH}/filter_results.py -i ${OUTPUT_DIRECTORY}.magi_gene_results.csv -o ${OUTPUT_DIRECTORY}.filtered_magi_gene_results.csv"
+  run_cmd "python ${MAGI_PATH}/filter_results.py -i ${OUTPUT_DIRECTORY}.magi_compound_results.csv -o ${OUTPUT_DIRECTORY}.filtered_magi_compound_results.csv"
+  touch "${CHECKPOINT}"
+  log "  - Done"
+fi
+
 
 
 ## Done
 log "Finished running MAGI2!"
+
 
 
