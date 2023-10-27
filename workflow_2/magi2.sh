@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-VERSION="2.0.2"
+VERSION="2.0.3"
 
 
 
@@ -87,9 +87,10 @@ The --nparts and --ncpus options allows you to control how parallel to run magi
 and how small each parallel piece should be.
 NOTE:
   - MAGI can be quite memory hungry at certain stages. Each part (with ~7000 lines)
-    can use upto 50GB of memory. So you can split large compound files into lots of
-    parts (e.g., '--nparts 24') and run a few of them (e.g., '--ncpus 6') at a time to lower
-    overall memory useage. 
+    can use upto 8GB of memory, which can result in large memory usage when lots of 
+    parts are run at the same time (e.g., for NCPUS=24, will use ~24parts*9Gb = 216Gb of 
+    memory). There for, you can split large compound files into lots of parts (e.g., '--nparts 24')
+    and run a few of them (e.g., '--ncpus 6') at a time to lower overall + per/part memory useage. 
 " 1>&2
 exit 1
 }
@@ -204,6 +205,7 @@ mkdir -p "${OUTPUT_DIRECTORY}" "${OUTPUT_DIRECTORY}/.checkpoint"
 ##
 if [ ! -z "${MZ}" ];
 then
+  log "Converting mz values in ${MZ} to SMILES for use with MAGI2"
   COMPOUNDS="${OUTPUT_DIRECTORY}/input.smiles.tsv"
   
   CHECKPOINT="${OUTPUT_DIRECTORY}/.checkpoint/mz_to_InChI.done"
@@ -212,6 +214,7 @@ then
     run_cmd "python ${MAGI_PATH}/mz_to_SMILES.py -i ${MZ} -o ${COMPOUNDS}" \
       && touch "${CHECKPOINT}" || exit 1
   fi
+  log "  - Done"
 else
   COMPOUNDS="${SMILES}"
 fi
@@ -371,9 +374,9 @@ CHECKPOINT="${OUTPUT_DIRECTORY}/.checkpoint/filter.done"
 if [ ! -e "${CHECKPOINT}" ];
 then
   log "Filtering combined results"
-  run_cmd "python ${MAGI_PATH}/filter_results.py -i ${OUTPUT_DIRECTORY}.magi_results.csv -o ${OUTPUT_DIRECTORY}.filtered_magi_results.csv"
-  run_cmd "python ${MAGI_PATH}/filter_results.py -i ${OUTPUT_DIRECTORY}.magi_gene_results.csv -o ${OUTPUT_DIRECTORY}.filtered_magi_gene_results.csv"
-  run_cmd "python ${MAGI_PATH}/filter_results.py -i ${OUTPUT_DIRECTORY}.magi_compound_results.csv -o ${OUTPUT_DIRECTORY}.filtered_magi_compound_results.csv"
+  run_cmd "python ${MAGI_PATH}/filter_results.py -i ${OUTPUT_DIRECTORY}.magi_results.csv -o ${OUTPUT_DIRECTORY}.filtered_magi_results.tsv"
+  run_cmd "python ${MAGI_PATH}/filter_results.py -i ${OUTPUT_DIRECTORY}.magi_gene_results.csv -o ${OUTPUT_DIRECTORY}.filtered_magi_gene_results.tsv"
+  run_cmd "python ${MAGI_PATH}/filter_results.py -i ${OUTPUT_DIRECTORY}.magi_compound_results.csv -o ${OUTPUT_DIRECTORY}.filtered_magi_compound_results.tsv"
   touch "${CHECKPOINT}"
   log "  - Done"
 fi
