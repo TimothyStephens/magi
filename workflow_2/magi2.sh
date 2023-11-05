@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-VERSION="2.0.3"
+VERSION="2.0.4"
 
 
 
@@ -76,7 +76,7 @@ Required:
 Optional:
 --magi_path     Full path to location where magi is installed (default: ${MAGI_PATH})
 -o, --output    Output directory with MAGI2 results (default: ${OUTPUT_DIRECTORY})
--p, --parts     Num parts to split --smiles/--mz file into before running magi (default: ${NPARTS})
+-p, --nparts    Num parts to split --smiles/--mz file into before running magi (default: ${NPARTS})
 -n, --ncpus     Num threads to use for MAGI2 (default: ${NCPUS})
 -v, --version   Script version (v${VERSION})
 -h, --help      This help message
@@ -253,7 +253,7 @@ then
     fi
   done < "${COMPOUNDS}.parts.txt" \
     | parallel -j ${NCPUS} -v \
-    && touch "${CHECKPOINT}"
+    && touch "${CHECKPOINT}" || exit 1
   log "  - Done"
 fi
 
@@ -277,7 +277,7 @@ then
     fi
   done < "${COMPOUNDS}.parts.txt" \
     | parallel -j ${NCPUS} -v \
-    && touch "${CHECKPOINT}"
+    && touch "${CHECKPOINT}" || exit 1
   log "  - Done"
 fi
 
@@ -301,7 +301,7 @@ then
     fi
   done < "${COMPOUNDS}.parts.txt" \
     | parallel -j ${NCPUS} -v \
-    && touch "${CHECKPOINT}"
+    && touch "${CHECKPOINT}" || exit 1
   log "  - Done"
 fi
 
@@ -325,7 +325,7 @@ then
     fi
   done < "${COMPOUNDS}.parts.txt" \
     | parallel -j 1 -v \
-    && touch "${CHECKPOINT}"
+    && touch "${CHECKPOINT}" || exit 1
   log "  - Done"
 fi
 
