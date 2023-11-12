@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-VERSION="0.1"
+VERSION="0.2"
 
 ## Pre-run setup
 set -euo pipefail
@@ -29,7 +29,7 @@ function err(){
 
 
 ## Set option envs
-NPARTS=24
+NLINES=5000
 FILE=""
 
 
@@ -39,14 +39,14 @@ echo -e "##
 ## $(basename ${0}) v${VERSION}
 ##
 
-Split input SMILES into nparts
+Split input SMILES into parts based on number of lines in input file
 
 Usage: 
 ./$(basename $0) -p 24 -f input.smiles.tsv
 
 Required:
 -f, --file      Inout SMILES file to split. 
--p, --parts     No. parts to split file into (default: $NPARTS)
+-l, --nlines    No. lines in each output file (default: $NLINES)
 
 Optional:
 -v, --version   Script version (v${VERSION})
@@ -69,8 +69,8 @@ while [[ $# -gt 0 ]]; do
       shift # past argument
       shift # past value
       ;;
-    -p|--parts)
-      NPARTS="$2"
+    -l|--nlines)
+      NLINES="$2"
       shift # past argument
       shift # past value
       ;;
@@ -115,8 +115,10 @@ EXT="${FILE##*.}"
 PREFIX="${FILE%*.*}.split_"
 PART_LIST="${FILE}.parts.txt"
 
+log "split.sh (v${VERSION})"
+
 rm -fr "${PART_LIST}"
-tail -n +2 "${FILE}" | split --numeric-suffixes=1 -n r/$NPARTS - "${PREFIX}"
+tail -n +2 "${FILE}" | split --numeric-suffixes=1 --suffix-length=4 -l $NLINES - "${PREFIX}"
 for f in "${PREFIX}"*;
 do
     head -n 1 "${FILE}" > tmp_file

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-VERSION="2.0.4"
+VERSION="2.0.5"
 
 
 
@@ -40,7 +40,7 @@ function err(){
 ## Set option envs
 ##
 NCPUS=8
-NPARTS=8
+NLINES=5000
 MIN_DIAMETER=12 # this is the Retro Rules diameter, see https://retrorules.org/doc for details
 MAGI_PATH="${SCRIPTPATH}"
 FASTA=""
@@ -61,9 +61,9 @@ echo -e "##
 Run MAGI2
 
 Usage: 
-./$(basename $0) -f pep.fa -p 20 -n 10 -m mz.txt
+./$(basename $0) -f pep.fa -n 10 -m mz.txt
 *OR*
-./$(basename $0) -f pep.fa -p 20 -n 10 -s SMILES.csv 
+./$(basename $0) -f pep.fa -n 10 -s SMILES.csv 
 
 Required:
 -f, --fasta     Input fasta file with protein sequences and unique identifiers in the header
@@ -76,21 +76,21 @@ Required:
 Optional:
 --magi_path     Full path to location where magi is installed (default: ${MAGI_PATH})
 -o, --output    Output directory with MAGI2 results (default: ${OUTPUT_DIRECTORY})
--p, --nparts    Num parts to split --smiles/--mz file into before running magi (default: ${NPARTS})
 -n, --ncpus     Num threads to use for MAGI2 (default: ${NCPUS})
+-l, --nlines    Number of lines per parallel process - affects RAM usage (default: $NLINES)
 -v, --version   Script version (v${VERSION})
 -h, --help      This help message
 --debug         Run debug mode
 
 Details:
-The --nparts and --ncpus options allows you to control how parallel to run magi 
+The --nlines and --ncpus options allows you to control how parallel to run magi 
 and how small each parallel piece should be.
 NOTE:
   - MAGI can be quite memory hungry at certain stages. Each part (with ~7000 lines)
     can use upto 8GB of memory, which can result in large memory usage when lots of 
     parts are run at the same time (e.g., for NCPUS=24, will use ~24parts*9Gb = 216Gb of 
-    memory). There for, you can split large compound files into lots of parts (e.g., '--nparts 24')
-    and run a few of them (e.g., '--ncpus 6') at a time to lower overall + per/part memory useage. 
+    memory). There for, you can split large compound files into lots of parts (e.g., '--nlines 5000')
+    and run a few of them (e.g., '--ncpus 6') at a time to lower overall + per/part memory useage.
 " 1>&2
 exit 1
 }
@@ -128,8 +128,8 @@ while [[ $# -gt 0 ]]; do
       shift # past argument
       shift # past value
       ;;
-    -p|--nparts)
-      NPARTS="$2"
+    -l|--nlines)
+      NLINES="$2"
       shift # past argument
       shift # past value
       ;;
@@ -227,8 +227,8 @@ fi
 CHECKPOINT="${OUTPUT_DIRECTORY}/.checkpoint/split.done"
 if [ ! -e "${CHECKPOINT}" ];
 then
-  log "Splitting ${COMPOUNDS} into ${NPARTS} parts"
-  run_cmd "${MAGI_PATH}/split.sh -p ${NPARTS} -f ${COMPOUNDS}" \
+  log "Splitting ${COMPOUNDS} into parts with max ${NLINES} SMILES per file"
+  run_cmd "${MAGI_PATH}/split.sh -l ${NLINES} -f ${COMPOUNDS}" \
     && touch "${CHECKPOINT}" || exit 1
   log "  - Done"
 fi
