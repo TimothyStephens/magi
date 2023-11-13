@@ -118,7 +118,14 @@ PART_LIST="${FILE}.parts.txt"
 log "split.sh (v${VERSION})"
 
 rm -fr "${PART_LIST}"
-tail -n +2 "${FILE}" | split --numeric-suffixes=1 --suffix-length=4 -l $NLINES - "${PREFIX}"
+
+# Get number of parts to split into using $NLINES
+#  - use round robin approach so each file is roughtly even sized
+L=$(tail -n +2 "${FILE}" | wc -l)
+NPARTS=$(( $(( L / $NLINES )) + 1 ))
+tail -n +2 "${FILE}" | split --numeric-suffixes=1 --suffix-length=4 -n r/$NPARTS - "${PREFIX}"
+
+# Add header to each part
 for f in "${PREFIX}"*;
 do
     head -n 1 "${FILE}" > tmp_file
